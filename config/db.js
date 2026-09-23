@@ -20,6 +20,10 @@ export const pool = new Pool({
   connectionTimeoutMillis: 10000
 });
 
+pool.on('error', (err) => {
+  console.warn('⚠️ Neon DB Pool idle client notice:', err.message);
+});
+
 export const query = (text, params) => pool.query(text, params);
 
 export async function initDb() {

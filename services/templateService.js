@@ -31,143 +31,518 @@ function getPreviousInvoiceMonth(currentMonth, currentYear) {
 }
 
 export function generateBackendInvoiceHtml(invoice = {}, business = {}, customer = {}) {
-  const cur = business.currency || 'PKR';
-  const items = Array.isArray(invoice.items) ? invoice.items : [];
-  const statusClass = String(invoice.status || 'unpaid').toLowerCase();
+  const p = business.proposalData || {};
+  const cur = invoice.currency || business.currency || 'PKR';
+  const items = Array.isArray(invoice.items) && invoice.items.length > 0 ? invoice.items : [
+    { name: invoice.notes || 'Professional Software Services', qty: 1, price: invoice.subtotal || invoice.total || 0, amount: invoice.subtotal || invoice.total || 0 }
+  ];
+  
   const prevDuesVal = Number(invoice.previousDues || (Number(invoice.total || 0) > Number(invoice.subtotal || 0) ? Number(invoice.total) - Number(invoice.subtotal) : 0));
   const prevMonthLabel = invoice.previousDuesMonths || getPreviousInvoiceMonth(invoice.month, invoice.year);
+
+  const compName = business.name || business.companyName || p.companyName || 'iSysware';
+  const compTagline = business.tagline || business.subtitle || p.tagline || 'ERP • Custom Software • Web • AI Solutions';
+  const compEmail = business.email || business.inquiryEmail || p.inquiryEmail || 'info@isysware.com';
+  const compPhone = business.phone || business.supportPhone || p.supportPhone || '+92 314 8843707';
+  const compWebsite = business.website || business.websiteUrl || p.websiteUrl || 'isysware.com';
+  const compContact = [compEmail, compPhone, compWebsite].filter(Boolean).join(' • ');
+  
+  const bankTitle = business.accountTitle || p.accountTitle || 'iSysware Software Solution';
+  const bankName = business.bankName || p.bankName || 'Meezan Bank';
+  const bankIban = business.accountIban || business.accountNo || p.accountIban || 'PK36MEZN00012345678901';
+  const payMethod = business.paymentMethod || p.paymentMethod || 'Bank Transfer / Online';
+  const invSubtitle = business.invoiceSubtitle || p.invoiceSubtitle || 'Professional Services Invoice';
+  const prepBy = business.preparedBy || p.preparedBy || compName;
+  
+  const issueDate = invoice.date || '';
+  const dueDate = invoice.dueDate || invoice.due || issueDate;
+  const invNo = invoice.invoiceNo || 'ISW-0001';
+
+  const clientName = customer.name || 'Client / Company Name';
+  const clientPerson = customer.contactPerson || customer.name || 'Contact Person';
+  const clientContact = [customer.email, customer.phone || customer.whatsapp].filter(Boolean).join(' / ') || 'Email / Phone';
+  const clientAddr = customer.address || business.address || 'Billing Address';
+
+  const billingPeriod = invoice.billingCycle || (invoice.month && invoice.year ? `${invoice.month} ${invoice.year}` : 'Monthly Cycle');
+  const servicePeriod = invoice.servicePeriod || (invoice.month && invoice.year ? `${invoice.month} ${invoice.year}` : issueDate);
+  const notesTerms = invoice.notes || business.footerNote || business.notes || p.invoiceNotes || 'Add payment terms, renewal note, support period, milestone details, tax note, or any client-specific instructions.';
+  const thankYouMsg = business.thankYouMsg || p.thankYouMsg || `Thank you for choosing ${compName}. • Please reference the invoice number when making payment.`;
 
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${esc(invoice.invoiceNo || 'INVOICE')}</title>
+  <title>${esc(invNo)}</title>
   <style>
     @page {
-      margin: 0;
+      margin: 10mm;
+      size: A4;
     }
     * { box-sizing: border-box; }
     html, body {
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
       background: #ffffff;
       padding: 0;
       margin: 0;
-      color: #172033;
+      color: #1e293b;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    .invoice {
-      max-width: 720px;
+    .inv-container {
+      max-width: 820px;
       width: 100%;
       margin: 0 auto;
       padding: 24px 28px 16px 28px;
       background: #ffffff;
-      border: none;
-      position: relative;
       box-sizing: border-box;
       page-break-inside: avoid;
       break-inside: avoid;
-      page-break-after: avoid;
-      break-after: avoid;
     }
-    .inv-head { display: flex; justify-content: space-between; gap: 20px; padding-bottom: 14px; border-bottom: 2px solid #1e293b; }
-    .inv-brand { display: flex; gap: 12px; }
-    .inv-logo { width: 54px; height: 54px; border: 1px solid #d6deea; border-radius: 6px; display: grid; place-items: center; overflow: hidden; font-weight: 800; color: #64748b; background: #fafbfd; }
-    .inv-logo img { width: 100%; height: 100%; object-fit: contain; }
-    .inv-brand h2 { margin: 0 0 4px; font-size: 19px; }
-    .inv-brand p { margin: 2px 0; color: #64748b; font-size: 11px; }
-    .inv-meta { text-align: right; }
-    .inv-meta h1 { margin: 0 0 6px; font-size: 24px; color: #0b4b8f; letter-spacing: 0.5px; }
-    .inv-meta div { font-size: 11px; margin: 3px 0; }
-    .inv-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 18px 0; }
-    .inv-info h4 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
-    .inv-info p { margin: 3px 0; font-size: 12px; }
-    table { width: 100%; border-collapse: collapse; page-break-inside: avoid; break-inside: avoid; }
-    .inv-table th, .inv-table td { font-size: 11px; padding: 8px 10px; border: 1px solid #dfe6ef; text-align: left; }
-    .inv-table th { background: #edf3fc; font-weight: 700; color: #1e293b; }
-    .inv-total { width: 320px; margin-left: auto; margin-top: 14px; page-break-inside: avoid; break-inside: avoid; }
-    .inv-total div { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; }
-    .inv-total .grand { border-top: 2px solid #111827; margin-top: 5px; padding-top: 8px; font-size: 15px; font-weight: 800; }
-    .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 36px; page-break-inside: avoid; break-inside: avoid; }
-    .sig { text-align: center; border-top: 1px solid #9aa6b6; padding-top: 6px; font-size: 10px; color: #64748b; }
+    
+    /* Top Header */
+    .inv-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .inv-brand-name {
+      font-size: 26px;
+      font-weight: 850;
+      color: #0b4b8f;
+      letter-spacing: -0.5px;
+      margin: 0 0 3px;
+    }
+    .inv-brand-sub {
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 500;
+      margin: 0 0 3px;
+    }
+    .inv-brand-contact {
+      font-size: 10.5px;
+      color: #0284c7;
+      margin: 0;
+      font-weight: 500;
+    }
+    .inv-title-col {
+      text-align: right;
+    }
+    .inv-main-title {
+      font-size: 30px;
+      font-weight: 900;
+      color: #0f172a;
+      letter-spacing: 1px;
+      margin: 0 0 2px;
+      line-height: 1;
+    }
+    .inv-main-sub {
+      font-size: 11px;
+      color: #64748b;
+      margin: 0;
+      font-weight: 500;
+    }
+    .inv-top-divider {
+      height: 3px;
+      background: #0b4b8f;
+      margin-top: 10px;
+      margin-bottom: 14px;
+      border-radius: 2px;
+    }
+
+    /* 4-Column Meta Box */
+    .inv-meta-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      background: #ffffff;
+    }
+    .inv-meta-item {
+      padding: 7px 12px;
+      border-right: 1px solid #cbd5e1;
+    }
+    .inv-meta-item:last-child {
+      border-right: none;
+    }
+    .inv-meta-label {
+      font-size: 9px;
+      font-weight: 800;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+    .inv-meta-val {
+      font-size: 12px;
+      font-weight: 750;
+      color: #0f172a;
+    }
+
+    /* 2-Column Party & Service Grid */
+    .inv-party-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      background: #ffffff;
+    }
+    .inv-party-col {
+      padding: 10px 14px;
+    }
+    .inv-party-col:first-child {
+      border-right: 1px solid #cbd5e1;
+    }
+    .inv-party-head {
+      font-size: 10px;
+      font-weight: 800;
+      color: #0b4b8f;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .inv-party-client-name {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .inv-party-text {
+      font-size: 11px;
+      color: #334155;
+      margin: 2px 0;
+      line-height: 1.35;
+    }
+
+    /* Table */
+    .inv-table-wrap {
+      margin-bottom: 14px;
+    }
+    .inv-table-title {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #0b4b8f;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+    table.inv-table {
+      width: 100%;
+      border-collapse: collapse;
+      page-break-inside: avoid;
+    }
+    table.inv-table th {
+      background: #0b4b8f;
+      color: #ffffff;
+      font-size: 10.5px;
+      font-weight: 750;
+      padding: 7px 10px;
+      text-align: left;
+      border: 1px solid #0b4b8f;
+    }
+    table.inv-table td {
+      font-size: 11px;
+      padding: 7px 10px;
+      border: 1px solid #e2e8f0;
+      color: #1e293b;
+    }
+    table.inv-table tbody tr:nth-child(even) {
+      background: #fafcff;
+    }
+
+    /* Bottom 2-Column Section */
+    .inv-bottom-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 14px;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+    }
+    .inv-payment-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 10px 12px;
+      background: #ffffff;
+    }
+    .inv-section-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: #0b4b8f;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 6px;
+    }
+    .inv-pay-row {
+      display: flex;
+      font-size: 10.5px;
+      margin: 2.5px 0;
+      line-height: 1.35;
+    }
+    .inv-pay-label {
+      width: 85px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .inv-pay-val {
+      flex: 1;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .inv-notes-content {
+      font-size: 10px;
+      color: #475569;
+      line-height: 1.4;
+      margin-top: 3px;
+    }
+
+    /* Summary Box */
+    .inv-summary-box {
+      background: #edf4fe;
+      border: 1px solid #c7dcfb;
+      border-radius: 4px;
+      padding: 10px 14px;
+    }
+    .inv-sum-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      font-size: 11px;
+      color: #334155;
+    }
+    .inv-sum-row.total-row {
+      font-weight: 800;
+      color: #0f172a;
+      border-top: 1px solid #cbd5e1;
+      margin-top: 4px;
+      padding-top: 5px;
+    }
+    .inv-sum-row.due-row {
+      font-size: 13.5px;
+      font-weight: 900;
+      color: #0b4b8f;
+      border-top: 2px solid #0b4b8f;
+      margin-top: 5px;
+      padding-top: 6px;
+    }
+
+    /* Signature row */
+    .inv-sig-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-top: 10px;
+      margin-bottom: 16px;
+      page-break-inside: avoid;
+    }
+    .inv-prep-by {
+      font-size: 10.5px;
+      color: #475569;
+    }
+    .inv-auth-sig {
+      font-size: 10.5px;
+      color: #475569;
+    }
+
+    /* Footer message */
+    .inv-footer-msg {
+      text-align: center;
+      font-size: 10px;
+      color: #0b4b8f;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .inv-footer-bottom {
+      text-align: center;
+      font-size: 9px;
+      color: #94a3b8;
+      border-top: 1px solid #f1f5f9;
+      padding-top: 6px;
+    }
+
     @media print {
-      html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
-      .invoice { border: none !important; border-radius: 0 !important; max-width: 100% !important; box-shadow: none !important; padding: 24px 28px 16px 28px !important; }
-      @page { margin: 0; }
+      html, body { background: #fff !important; margin: 0 !important; }
+      .inv-container { max-width: 100% !important; padding: 0 !important; }
+      @page { margin: 8mm; }
     }
   </style>
 </head>
 <body>
-  <div class="invoice">
-    <div class="inv-head">
-      <div class="inv-brand">
-        <div class="inv-logo">${business.logo ? `<img src="${business.logo}" alt="Logo">` : 'LOGO'}</div>
-        <div>
-          <h2>${esc(business.name || 'Your Business')}</h2>
-          <p>${esc(business.address || '')}</p>
-          <p>${esc([business.phone, business.email].filter(Boolean).join(' • '))}</p>
-          ${business.tax ? `<p>${esc(business.tax)}</p>` : ''}
+  <div class="inv-container">
+    <!-- Top Header -->
+    <div class="inv-top">
+      <div>
+        <h1 class="inv-brand-name">${esc(compName)}</h1>
+        <div class="inv-brand-sub">${esc(compTagline)}</div>
+        <div class="inv-brand-contact">${esc(compContact)}</div>
+      </div>
+      <div class="inv-title-col">
+        <div class="inv-main-title">INVOICE</div>
+        <div class="inv-main-sub">${esc(invSubtitle)}</div>
+      </div>
+    </div>
+
+    <!-- Blue Top Divider -->
+    <div class="inv-top-divider"></div>
+
+    <!-- 4-Column Meta Box -->
+    <div class="inv-meta-bar">
+      <div class="inv-meta-item">
+        <div class="inv-meta-label">INVOICE NO.</div>
+        <div class="inv-meta-val">${esc(invNo)}</div>
+      </div>
+      <div class="inv-meta-item">
+        <div class="inv-meta-label">ISSUE DATE</div>
+        <div class="inv-meta-val">${esc(issueDate)}</div>
+      </div>
+      <div class="inv-meta-item">
+        <div class="inv-meta-label">DUE DATE</div>
+        <div class="inv-meta-val">${esc(dueDate)}</div>
+      </div>
+      <div class="inv-meta-item">
+        <div class="inv-meta-label">CURRENCY</div>
+        <div class="inv-meta-val">${esc(cur)}</div>
+      </div>
+    </div>
+
+    <!-- Bill To & Service Details 2-Column Box -->
+    <div class="inv-party-grid">
+      <div class="inv-party-col">
+        <div class="inv-party-head">BILL TO</div>
+        <div class="inv-party-client-name">${esc(clientName)}</div>
+        <div class="inv-party-text">Contact: ${esc(clientPerson)}</div>
+        <div class="inv-party-text">Email / Phone: ${esc(clientContact)}</div>
+        <div class="inv-party-text">Billing Address: ${esc(clientAddr)}</div>
+      </div>
+      <div class="inv-party-col">
+        <div class="inv-party-head">SERVICE DETAILS</div>
+        <div class="inv-party-text"><strong>Project / Service:</strong> ${esc(invoice.project || invoice.projectName || customer.projectName || 'Enterprise Software & Cloud Billing')}</div>
+        <div class="inv-party-text"><strong>Service Type:</strong> ${esc(invoice.serviceType || 'Software Development & Hosting')}</div>
+        <div class="inv-party-text"><strong>Billing Cycle:</strong> ${esc(billingPeriod)}</div>
+        <div class="inv-party-text"><strong>Service Period:</strong> ${esc(servicePeriod)}</div>
+      </div>
+    </div>
+
+    <!-- Table: INVOICE ITEMS -->
+    <div class="inv-table-wrap">
+      <div class="inv-table-title">INVOICE ITEMS</div>
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th style="width: 5%; text-align: center;">#</th>
+            <th style="width: 45%;">Description</th>
+            <th style="width: 25%;">Billing Period / Milestone</th>
+            <th style="width: 10%; text-align: center;">Qty</th>
+            <th style="width: 15%; text-align: right;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((x, idx) => `
+            <tr>
+              <td style="text-align: center; color: #64748b; font-weight: 600;">${idx + 1}</td>
+              <td>
+                <strong>${esc(x.name || x.description || 'Service Deliverable')}</strong>
+                ${x.desc ? `<div style="font-size: 9.5px; color: #64748b; margin-top: 1px;">${esc(x.desc)}</div>` : ''}
+              </td>
+              <td>${esc(x.period || billingPeriod)}</td>
+              <td style="text-align: center;">${x.qty || 1}</td>
+              <td style="text-align: right; font-weight: 700;">${money(x.amount || (Number(x.qty || 1) * Number(x.price || 0)), cur)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bottom 2-Column Section -->
+    <div class="inv-bottom-grid">
+      <!-- Left: Payment Details & Notes -->
+      <div class="inv-payment-box">
+        <div class="inv-section-title">PAYMENT DETAILS</div>
+        <div class="inv-pay-row">
+          <span class="inv-pay-label">Method:</span>
+          <span class="inv-pay-val">${esc(payMethod)}</span>
+        </div>
+        <div class="inv-pay-row">
+          <span class="inv-pay-label">Account Title:</span>
+          <span class="inv-pay-val">${esc(bankTitle)}</span>
+        </div>
+        <div class="inv-pay-row">
+          <span class="inv-pay-label">Bank / Wallet:</span>
+          <span class="inv-pay-val">${esc(bankName)}</span>
+        </div>
+        <div class="inv-pay-row">
+          <span class="inv-pay-label">Account / IBAN:</span>
+          <span class="inv-pay-val" style="font-family: monospace; font-size: 11px;">${esc(bankIban)}</span>
+        </div>
+
+        <div class="inv-section-title" style="margin-top: 10px; border-top: 1px solid #f1f5f9; padding-top: 6px;">NOTES / TERMS</div>
+        <div class="inv-notes-content">${esc(notesTerms)}</div>
+      </div>
+
+      <!-- Right: Financial Summary -->
+      <div class="inv-summary-box">
+        <div class="inv-sum-row">
+          <span>Subtotal</span>
+          <strong>${money(invoice.subtotal || invoice.total, cur)}</strong>
+        </div>
+        ${Boolean(invoice.discount) ? `
+          <div class="inv-sum-row">
+            <span>Discount</span>
+            <strong style="color: #16a34a;">- ${money(invoice.discount, cur)}</strong>
+          </div>
+        ` : `
+          <div class="inv-sum-row">
+            <span>Discount</span>
+            <span>[0.00]</span>
+          </div>
+        `}
+        ${Boolean(invoice.taxAmount || invoice.taxPct) ? `
+          <div class="inv-sum-row">
+            <span>Tax / VAT ${invoice.taxPct ? `(${invoice.taxPct}%)` : ''}</span>
+            <strong>${money(invoice.taxAmount, cur)}</strong>
+          </div>
+        ` : `
+          <div class="inv-sum-row">
+            <span>Tax / VAT</span>
+            <span>[0.00]</span>
+          </div>
+        `}
+        ${prevDuesVal > 0 ? `
+          <div class="inv-sum-row" style="color: #d97706;">
+            <span>Arrears / Prev Dues ${prevMonthLabel ? `(${esc(prevMonthLabel)})` : ''}</span>
+            <strong>+ ${money(prevDuesVal, cur)}</strong>
+          </div>
+        ` : ''}
+        <div class="inv-sum-row total-row">
+          <span>TOTAL</span>
+          <strong>${money(invoice.total, cur)}</strong>
+        </div>
+        <div class="inv-sum-row">
+          <span>Paid</span>
+          <span>${money(invoice.paid || 0, cur)}</span>
+        </div>
+        <div class="inv-sum-row due-row">
+          <span>BALANCE DUE</span>
+          <span>${money(invoice.balance !== undefined ? invoice.balance : invoice.total, cur)}</span>
         </div>
       </div>
-      <div class="inv-meta">
-        <h1>INVOICE</h1>
-        <div><strong>${esc(invoice.invoiceNo || 'INV-0001')}</strong></div>
-        <div>Month: ${esc(invoice.month || '')} ${esc(invoice.year || '')}</div>
-        <div>Invoice Date: ${esc(invoice.date || '')}</div>
-        <div>Due Date: ${esc(invoice.dueDate || invoice.due || '')}</div>
+    </div>
+
+    <!-- Signatures Row -->
+    <div class="inv-sig-row">
+      <div class="inv-prep-by">
+        <strong>Prepared By:</strong> ${esc(prepBy)}
+      </div>
+      <div class="inv-auth-sig">
+        <strong>Authorized Signature:</strong> ______________________
       </div>
     </div>
-    <div class="inv-info">
-      <div>
-        <h4>Bill To</h4>
-        <p><strong>${esc(customer.name || 'Client')}</strong></p>
-        ${customer.phone ? `<p>Phone: ${esc(customer.phone)}</p>` : ''}
-        ${customer.whatsapp && customer.whatsapp !== customer.phone ? `<p>WhatsApp: ${esc(customer.whatsapp)}</p>` : ''}
-        ${business.address ? `<p>${esc(business.address)}</p>` : ''}
-      </div>
-      <div>
-        <h4>Payment Status</h4>
-        <p>Status: <strong>${esc(invoice.status || 'Unpaid')}</strong></p>
-        <p>Paid: <strong>${money(invoice.paid, cur)}</strong></p>
-        <p>Balance: <strong>${money(invoice.balance, cur)}</strong></p>
-      </div>
-    </div>
-    <table class="inv-table">
-      <thead>
-        <tr>
-          <th>Description</th>
-          <th style="text-align:center">Qty</th>
-          <th style="text-align:right">Unit Price</th>
-          <th style="text-align:right">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${items.length > 0 ? items.map((x) => `<tr>
-          <td>${esc(x.name || x.description || 'Item')}</td>
-          <td style="text-align:center">${x.qty || 1}</td>
-          <td style="text-align:right">${money(x.price || x.amount || 0, cur)}</td>
-          <td style="text-align:right">${money((Number(x.qty || 1) * Number(x.price || x.amount || 0)), cur)}</td>
-        </tr>`).join('') : `<tr>
-          <td>Monthly Service / Billing</td>
-          <td style="text-align:center">1</td>
-          <td style="text-align:right">${money(invoice.total, cur)}</td>
-          <td style="text-align:right">${money(invoice.total, cur)}</td>
-        </tr>`}
-      </tbody>
-    </table>
-    <div class="inv-total">
-      <div><span>Current Subtotal</span><strong>${money(invoice.subtotal || invoice.total, cur)}</strong></div>
-      ${prevDuesVal > 0 ? `<div><span style="color:#d97706;font-weight:600">Previous Balance / Arrears ${prevMonthLabel ? `(${esc(prevMonthLabel)})` : ''}</span><strong style="color:#d97706">+ ${money(prevDuesVal, cur)}</strong></div>` : ''}
-      ${invoice.discount ? `<div><span>Discount</span><strong>- ${money(invoice.discount, cur)}</strong></div>` : ''}
-      <div><span>Grand Total</span><strong>${money(invoice.total, cur)}</strong></div>
-      <div><span>Paid</span><strong>${money(invoice.paid, cur)}</strong></div>
-      <div class="grand"><span>Balance Due</span><span>${money(invoice.balance, cur)}</span></div>
-    </div>
-    ${invoice.notes ? `<div style="margin-top:20px;font-size:11px;color:#475569"><strong>Notes:</strong><br>${esc(invoice.notes)}</div>` : ''}
-    <div class="sigs">
-      <div class="sig">Client Signature</div>
-      <div class="sig">Authorized Signature</div>
-    </div>
+
+    <!-- Footer Message & Contact -->
+    <div class="inv-footer-msg">${esc(thankYouMsg)}</div>
+    <div class="inv-footer-bottom">${esc(compName)} | ${esc(compEmail)} | ${esc(compPhone)} | ${esc(compWebsite)}</div>
   </div>
 </body>
 </html>`;
