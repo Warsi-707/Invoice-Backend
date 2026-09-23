@@ -7,13 +7,19 @@ import QRCode from 'qrcode';
 import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const makeWASocket = makeWASocketPkg.default || makeWASocketPkg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SESSION_DIR = path.resolve(__dirname, '../whatsapp_session');
+const DEFAULT_SESSION_DIR = path.resolve(__dirname, '../whatsapp_session');
+const SESSION_DIR = process.env.WHATSAPP_SESSION_PATH || (
+  (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT)
+    ? path.join(os.tmpdir(), 'whatsapp_session')
+    : DEFAULT_SESSION_DIR
+);
 
 // In-memory status state
 let sock = null;
