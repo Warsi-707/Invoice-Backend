@@ -74,10 +74,7 @@ export async function initWhatsApp(forceRestart = false) {
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-    const { version, isLatest } = await fetchLatestBaileysVersion().catch(() => ({
-      version: [2, 3000, 1015901307],
-      isLatest: true
-    }));
+    const version = [2, 3000, 1015901307];
 
     console.log(`📱 Initializing Baileys WhatsApp Web (v${version.join('.')})...`);
 
