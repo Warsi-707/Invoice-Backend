@@ -26,16 +26,18 @@ router.post('/auth/login', authController.login);
 // PDF generation (backend, uses system Chrome via puppeteer)
 router.post('/pdf/generate', pdfController.generate);
 
+// WhatsApp Status, Connect & Logout (Accessible for QR scanner tab)
+router.get('/whatsapp/status', whatsappController.getStatus);
+router.post('/whatsapp/connect', whatsappController.connect);
+router.post('/whatsapp/logout', whatsappController.logout);
+
 // All application data and account routes require a valid JWT.
 router.use(authenticateToken);
 
 router.post('/auth/logout', authController.logout);
 router.get('/auth/me', authController.getMe);
 
-// WhatsApp Baileys Web Integration
-router.get('/whatsapp/status', whatsappController.getStatus);
-router.post('/whatsapp/connect', whatsappController.connect);
-router.post('/whatsapp/logout', whatsappController.logout);
+// Protected WhatsApp actions
 router.post('/whatsapp/send-invoice', whatsappController.sendInvoice);
 router.post('/whatsapp/send-text', whatsappController.sendText);
 router.post('/whatsapp/send-document', whatsappController.sendDocument);
