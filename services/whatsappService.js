@@ -78,6 +78,18 @@ export async function initWhatsApp(forceRestart = false) {
   connectionStatus = 'CONNECTING';
 
   try {
+    // If force restart and not yet connected, wipe unlinked session files to prevent 'Could not link device'
+    if (forceRestart && connectionStatus !== 'CONNECTED') {
+      currentQrDataUrl = null;
+      try {
+        if (fs.existsSync(SESSION_DIR)) {
+          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+        }
+      } catch (e) {
+        console.warn('Could not clear session on forceRestart:', e.message);
+      }
+    }
+
     if (!fs.existsSync(SESSION_DIR)) {
       fs.mkdirSync(SESSION_DIR, { recursive: true });
     }
@@ -108,11 +120,13 @@ export async function initWhatsApp(forceRestart = false) {
       logger,
       printQRInTerminal: false,
       auth: state,
-      browser: Browsers.macOS('Desktop'),
+      browser: Browsers.ubuntu('Chrome'),
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
       linkPreviewImageThumbnailWidth: 0,
-      keepAliveIntervalMs: 15000
+      keepAliveIntervalMs: 25000,
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -158,11 +172,12 @@ export async function initWhatsApp(forceRestart = false) {
         console.log(`✅ WhatsApp Connected successfully as ${connectedUser.phone}!`);
       } else if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
         console.log(`⚠️ WhatsApp connection closed. Reason code: ${statusCode}. Reconnect: ${shouldReconnect}`);
 
-        if (statusCode === DisconnectReason.loggedOut) {
+        if (isLoggedOut || !connectedUser) {
           connectionStatus = 'DISCONNECTED';
           currentQrDataUrl = null;
           connectedUser = null;
@@ -173,6 +188,11 @@ export async function initWhatsApp(forceRestart = false) {
             }
           } catch (err) {
             console.error('Error clearing session dir:', err);
+          }
+          if (shouldReconnect && !isLoggedOut) {
+            setTimeout(() => {
+              initWhatsApp(true).catch(console.error);
+            }, 1000);
           }
         } else {
           isInitializing = false;
