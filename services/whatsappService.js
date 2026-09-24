@@ -150,7 +150,6 @@ export async function initWhatsApp(forceRestart = false) {
           currentQrDataUrl = null;
           connectedUser = null;
           isInitializing = false;
-          // Clear session files
           try {
             if (fs.existsSync(SESSION_DIR)) {
               fs.rmSync(SESSION_DIR, { recursive: true, force: true });
@@ -159,12 +158,16 @@ export async function initWhatsApp(forceRestart = false) {
             console.error('Error clearing session dir:', err);
           }
         } else {
-          connectionStatus = 'CONNECTING';
-          currentQrDataUrl = null;
           isInitializing = false;
+          // Maintain connected state for UI if already linked
+          if (connectedUser) {
+            connectionStatus = 'CONNECTED';
+          } else {
+            connectionStatus = 'CONNECTING';
+          }
           setTimeout(() => {
             initWhatsApp(true).catch(console.error);
-          }, 3000);
+          }, 1500);
         }
       }
     });
