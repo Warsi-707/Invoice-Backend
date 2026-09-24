@@ -61,7 +61,7 @@ export async function initWhatsApp(forceRestart = false) {
     return getWhatsAppStatus();
   }
 
-  if (sock && connectionStatus === 'CONNECTED' && !forceRestart) {
+  if (sock && (connectionStatus === 'CONNECTED' || connectionStatus === 'SCAN_QR' || connectionStatus === 'CONNECTING') && !forceRestart) {
     return getWhatsAppStatus();
   }
 
