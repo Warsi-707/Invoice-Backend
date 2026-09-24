@@ -2,6 +2,7 @@ import {
   getWhatsAppStatus,
   initWhatsApp,
   logoutWhatsApp,
+  requestWhatsAppPairingCode,
   sendWhatsAppMessage,
   sendInvoiceWhatsApp,
   sendDocumentWhatsApp
@@ -25,6 +26,16 @@ export const whatsappController = {
       res.json(status);
     } catch (err) {
       next(err);
+    }
+  },
+
+  requestPairingCode: async (req, res, next) => {
+    try {
+      const { phone } = req.body || {};
+      const result = await requestWhatsAppPairingCode(phone);
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
     }
   },
 

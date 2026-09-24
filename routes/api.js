@@ -29,6 +29,7 @@ router.post('/pdf/generate', pdfController.generate);
 // WhatsApp Status, Connect & Logout (Accessible for QR scanner tab)
 router.get('/whatsapp/status', whatsappController.getStatus);
 router.post('/whatsapp/connect', whatsappController.connect);
+router.post('/whatsapp/pairing-code', whatsappController.requestPairingCode);
 router.post('/whatsapp/logout', whatsappController.logout);
 
 // All application data and account routes require a valid JWT.

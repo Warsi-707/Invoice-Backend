@@ -1,6 +1,7 @@
 import makeWASocketPkg, {
   DisconnectReason,
   useMultiFileAuthState,
+  fetchLatestWaWebVersion,
   fetchLatestBaileysVersion,
   Browsers
 } from '@whiskeysockets/baileys';
@@ -28,7 +29,7 @@ let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'CONNECTING' | 'SCAN_
 let currentQrDataUrl = null;
 let connectedUser = null;
 let isInitializing = false;
-let cachedVersion = [2, 3000, 1043857760];
+let cachedVersion = [2, 3000, 1048361770];
 
 const logger = pino({ level: 'silent' });
 
@@ -78,18 +79,34 @@ export async function initWhatsApp(forceRestart = false) {
   connectionStatus = 'CONNECTING';
 
   try {
+    if (forceRestart && fs.existsSync(SESSION_DIR)) {
+      try {
+        fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+      } catch (e) {
+        console.warn('Notice removing old session on force restart:', e.message);
+      }
+    }
+
     if (!fs.existsSync(SESSION_DIR)) {
       fs.mkdirSync(SESSION_DIR, { recursive: true });
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
-    // Try to fetch latest Baileys protocol version or use modern fallback
+    // Try to fetch latest live WhatsApp Web version directly from server
     try {
-      const vObj = await fetchLatestBaileysVersion();
-      if (vObj?.version) cachedVersion = vObj.version;
+      const waVersion = await fetchLatestWaWebVersion();
+      if (waVersion?.version) {
+        cachedVersion = waVersion.version;
+        console.log(`📱 Fetched latest live WhatsApp Web version: v${cachedVersion.join('.')}`);
+      }
     } catch (e) {
-      // Keep cached modern version
+      try {
+        const vObj = await fetchLatestBaileysVersion();
+        if (vObj?.version) cachedVersion = vObj.version;
+      } catch (e2) {
+        cachedVersion = [2, 3000, 1048361770];
+      }
     }
 
     console.log(`📱 Initializing Baileys WhatsApp Web (v${cachedVersion.join('.')})...`);
@@ -108,11 +125,13 @@ export async function initWhatsApp(forceRestart = false) {
       logger,
       printQRInTerminal: false,
       auth: state,
-      browser: Browsers.macOS('Desktop'),
+      browser: Browsers.macOS('Chrome'),
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
       linkPreviewImageThumbnailWidth: 0,
-      keepAliveIntervalMs: 15000
+      keepAliveIntervalMs: 25000,
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -369,4 +388,45 @@ export async function sendDocumentWhatsApp(toPhone, base64Data, fileName, mimeTy
   // Convert base64 to Buffer
   const buffer = Buffer.from(base64Data, 'base64');
   return sendDirectBufferWhatsApp(toPhone, buffer, fileName, mimeType, caption);
+}
+
+export async function requestWhatsAppPairingCode(phone) {
+  if (!phone) {
+    throw new Error('Phone number is required.');
+  }
+
+  let clean = String(phone).replace(/\D/g, '');
+  if (clean.startsWith('03') && clean.length === 11) {
+    clean = '92' + clean.slice(1);
+  } else if (clean.startsWith('3') && clean.length === 10) {
+    clean = '92' + clean;
+  }
+
+  if (clean.length < 10) {
+    throw new Error('Please enter a valid phone number (e.g. 03218246707 or 923218246707).');
+  }
+
+  // Ensure socket is active and ready
+  if (!sock || connectionStatus === 'DISCONNECTED') {
+    await initWhatsApp(true);
+  }
+
+  // If socket is still initializing or waiting for QR, wait briefly
+  let attempts = 0;
+  while (!sock && attempts < 10) {
+    await new Promise((r) => setTimeout(r, 400));
+    attempts++;
+  }
+
+  if (!sock) {
+    throw new Error('Could not establish WhatsApp socket. Please try again.');
+  }
+
+  if (sock.authState?.creds?.registered) {
+    throw new Error('WhatsApp is already linked and connected.');
+  }
+
+  const rawCode = await sock.requestPairingCode(clean);
+  const code = (rawCode?.match(/.{1,4}/g)?.join('-') || rawCode).toUpperCase();
+  return { success: true, code, phone: clean };
 }
