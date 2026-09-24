@@ -78,18 +78,6 @@ export async function initWhatsApp(forceRestart = false) {
   connectionStatus = 'CONNECTING';
 
   try {
-    // If force restart and not yet connected, wipe unlinked session files to prevent 'Could not link device'
-    if (forceRestart && connectionStatus !== 'CONNECTED') {
-      currentQrDataUrl = null;
-      try {
-        if (fs.existsSync(SESSION_DIR)) {
-          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-        }
-      } catch (e) {
-        console.warn('Could not clear session on forceRestart:', e.message);
-      }
-    }
-
     if (!fs.existsSync(SESSION_DIR)) {
       fs.mkdirSync(SESSION_DIR, { recursive: true });
     }
@@ -120,13 +108,11 @@ export async function initWhatsApp(forceRestart = false) {
       logger,
       printQRInTerminal: false,
       auth: state,
-      browser: Browsers.ubuntu('Chrome'),
+      browser: Browsers.macOS('Desktop'),
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
       linkPreviewImageThumbnailWidth: 0,
-      keepAliveIntervalMs: 25000,
-      connectTimeoutMs: 60000,
-      defaultQueryTimeoutMs: 60000
+      keepAliveIntervalMs: 15000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -177,7 +163,7 @@ export async function initWhatsApp(forceRestart = false) {
 
         console.log(`⚠️ WhatsApp connection closed. Reason code: ${statusCode}. Reconnect: ${shouldReconnect}`);
 
-        if (isLoggedOut || !connectedUser) {
+        if (isLoggedOut) {
           connectionStatus = 'DISCONNECTED';
           currentQrDataUrl = null;
           connectedUser = null;
@@ -189,37 +175,34 @@ export async function initWhatsApp(forceRestart = false) {
           } catch (err) {
             console.error('Error clearing session dir:', err);
           }
-          if (shouldReconnect && !isLoggedOut) {
-            setTimeout(() => {
-              initWhatsApp(true).catch(console.error);
-            }, 1000);
-          }
         } else {
           isInitializing = false;
           // Maintain connected state for UI if already linked
           if (connectedUser) {
             connectionStatus = 'CONNECTED';
           } else {
-            connectionStatus = 'CONNECTING';
+            if (!currentQrDataUrl) {
+              connectionStatus = 'CONNECTING';
+            }
           }
           setTimeout(() => {
-            initWhatsApp(true).catch(console.error);
+            initWhatsApp(false).catch(console.error);
           }, 1500);
         }
       }
     });
 
-    // Wait briefly (up to 2.5s) for QR code or initial connection so first API response has QR immediately
+    // Wait briefly (up to 3s) for QR code or initial connection so first API response has QR immediately
     if (!currentQrDataUrl && connectionStatus !== 'CONNECTED') {
       await new Promise((resolve) => {
-        const timeout = setTimeout(resolve, 2500);
+        const timeout = setTimeout(resolve, 3000);
         const check = setInterval(() => {
           if (currentQrDataUrl || connectionStatus === 'CONNECTED') {
             clearTimeout(timeout);
             clearInterval(check);
             resolve();
           }
-        }, 80);
+        }, 50);
       });
     }
 
