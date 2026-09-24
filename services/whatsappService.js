@@ -57,11 +57,18 @@ export function formatToWhatsAppJid(phone) {
 }
 
 export async function initWhatsApp(forceRestart = false) {
-  if (isInitializing && !forceRestart) {
+  // If already connected, return status
+  if (sock && connectionStatus === 'CONNECTED' && !forceRestart) {
     return getWhatsAppStatus();
   }
 
-  if (sock && (connectionStatus === 'CONNECTED' || connectionStatus === 'SCAN_QR' || connectionStatus === 'CONNECTING') && !forceRestart) {
+  // If QR code is already generated and ready to scan, return it
+  if (sock && connectionStatus === 'SCAN_QR' && currentQrDataUrl && !forceRestart) {
+    return getWhatsAppStatus();
+  }
+
+  // If already currently in the middle of initializing, return status
+  if (isInitializing && !forceRestart) {
     return getWhatsAppStatus();
   }
 
@@ -172,6 +179,20 @@ export async function initWhatsApp(forceRestart = false) {
         }
       }
     });
+
+    // Wait briefly (up to 2.5s) for QR code or initial connection so first API response has QR immediately
+    if (!currentQrDataUrl && connectionStatus !== 'CONNECTED') {
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 2500);
+        const check = setInterval(() => {
+          if (currentQrDataUrl || connectionStatus === 'CONNECTED') {
+            clearTimeout(timeout);
+            clearInterval(check);
+            resolve();
+          }
+        }, 80);
+      });
+    }
 
     return getWhatsAppStatus();
   } catch (err) {
