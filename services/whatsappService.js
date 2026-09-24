@@ -106,6 +106,7 @@ export async function initWhatsApp(forceRestart = false) {
 
       if (qr) {
         connectionStatus = 'SCAN_QR';
+        isInitializing = false;
         try {
           currentQrDataUrl = await QRCode.toDataURL(qr, {
             margin: 2,
