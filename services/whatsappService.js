@@ -61,12 +61,12 @@ export function formatToWhatsAppJid(phone) {
 
 export async function initWhatsApp(forceRestart = false) {
   // If already connected, return status
-  if (sock && connectionStatus === 'CONNECTED' && !forceRestart) {
+  if (sock && sock.ws?.isOpen && connectionStatus === 'CONNECTED' && !forceRestart) {
     return getWhatsAppStatus();
   }
 
-  // If QR code is already generated and ready to scan, return it
-  if (sock && connectionStatus === 'SCAN_QR' && currentQrDataUrl && !forceRestart) {
+  // If QR code is already generated and socket is actively listening, return it
+  if (sock && sock.ws?.isOpen && connectionStatus === 'SCAN_QR' && currentQrDataUrl && !forceRestart) {
     return getWhatsAppStatus();
   }
 
@@ -178,9 +178,16 @@ export async function initWhatsApp(forceRestart = false) {
       } else if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const isRestartRequired = statusCode === DisconnectReason.restartRequired;
 
-        console.log(`⚠️ WhatsApp connection closed. Reason code: ${statusCode}. Reconnect: ${shouldReconnect}`);
+        console.log(`⚠️ WhatsApp connection closed. Reason code: ${statusCode}. LoggedOut: ${isLoggedOut}, RestartRequired: ${isRestartRequired}`);
+
+        if (sock) {
+          try {
+            sock.ev.removeAllListeners();
+          } catch (e) {}
+        }
+        sock = null;
 
         if (isLoggedOut) {
           connectionStatus = 'DISCONNECTED';
@@ -194,19 +201,25 @@ export async function initWhatsApp(forceRestart = false) {
           } catch (err) {
             console.error('Error clearing session dir:', err);
           }
-        } else {
+          // Auto-reinitialize fresh QR code
+          setTimeout(() => {
+            initWhatsApp(true).catch(console.error);
+          }, 1500);
+        } else if (isRestartRequired || connectedUser) {
+          // Normal handshake restart or reconnecting linked user - keep creds intact
+          connectionStatus = 'CONNECTING';
           isInitializing = false;
-          // Maintain connected state for UI if already linked
-          if (connectedUser) {
-            connectionStatus = 'CONNECTED';
-          } else {
-            if (!currentQrDataUrl) {
-              connectionStatus = 'CONNECTING';
-            }
-          }
           setTimeout(() => {
             initWhatsApp(false).catch(console.error);
-          }, 1500);
+          }, 800);
+        } else {
+          // QR code expired or unpaired socket timed out - refresh QR cleanly
+          connectionStatus = 'CONNECTING';
+          currentQrDataUrl = null;
+          isInitializing = false;
+          setTimeout(() => {
+            initWhatsApp(true).catch(console.error);
+          }, 1000);
         }
       }
     });
