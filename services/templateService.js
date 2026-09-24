@@ -509,23 +509,23 @@ export function generateBackendInvoiceHtml(invoice = {}, business = {}, customer
             <span>[0.00]</span>
           </div>
         `}
+        <div class="inv-sum-row total-row">
+          <span>${prevDuesVal > 0 ? 'CURRENT INVOICE TOTAL' : 'TOTAL'}</span>
+          <strong>${money(invoice.total, cur)}</strong>
+        </div>
         ${prevDuesVal > 0 ? `
-          <div class="inv-sum-row" style="color: #d97706;">
+          <div class="inv-sum-row" style="color: #d97706; font-weight: 700;">
             <span>Arrears / Prev Dues ${prevMonthLabel ? `(${esc(prevMonthLabel)})` : ''}</span>
             <strong>+ ${money(prevDuesVal, cur)}</strong>
           </div>
         ` : ''}
-        <div class="inv-sum-row total-row">
-          <span>TOTAL</span>
-          <strong>${money(invoice.total, cur)}</strong>
-        </div>
         <div class="inv-sum-row">
           <span>Paid</span>
           <span>${money(invoice.paid || 0, cur)}</span>
         </div>
         <div class="inv-sum-row due-row">
-          <span>BALANCE DUE</span>
-          <span>${money(invoice.balance !== undefined ? invoice.balance : invoice.total, cur)}</span>
+          <span>${prevDuesVal > 0 ? 'NET AMOUNT PAYABLE' : 'BALANCE DUE'}</span>
+          <span>${money(Number(invoice.balance !== undefined ? invoice.balance : invoice.total) + (prevDuesVal > 0 ? prevDuesVal : 0), cur)}</span>
         </div>
       </div>
     </div>
