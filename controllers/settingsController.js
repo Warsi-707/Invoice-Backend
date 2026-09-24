@@ -1,8 +1,12 @@
 import { query } from '../config/db.js';
+import { memoryCache, CacheKeys, invalidateSettingsCaches, invalidateAllCaches } from '../services/cacheService.js';
 
 export const settingsController = {
   getSettings: async (req, res, next) => {
     try {
+      const cached = memoryCache.get(CacheKeys.SETTINGS);
+      if (cached) return res.json(cached);
+
       const result = await query('SELECT * FROM settings LIMIT 1');
       const row = result.rows[0] || {
         admin: 'Administrator',
@@ -13,14 +17,17 @@ export const settingsController = {
         proposal_data: {}
       };
 
-      res.json({
+      const settingsData = {
         admin: row.admin || 'Administrator',
         password: row.password || 'admin123',
         currency: row.currency || 'PKR',
         dueDays: row.due_days ?? 0,
         footerNote: row.footer_note || 'Thank you for your business.',
         proposalData: row.proposal_data || {}
-      });
+      };
+
+      memoryCache.set(CacheKeys.SETTINGS, settingsData, 300);
+      res.json(settingsData);
     } catch (err) {
       next(err);
     }
@@ -60,6 +67,8 @@ export const settingsController = {
       }
 
       const row = result.rows[0];
+      invalidateSettingsCaches();
+
       res.json({
         success: true,
         settings: {
@@ -296,6 +305,7 @@ export const settingsController = {
         }
       }
 
+      invalidateAllCaches();
       res.json({ success: true, message: 'Data restored successfully.' });
     } catch (err) {
       next(err);
@@ -312,6 +322,7 @@ export const settingsController = {
         UPDATE settings
         SET admin = 'Admin', currency = 'PKR', due_days = 0, footer_note = 'Thank you for your business.', updated_at = CURRENT_TIMESTAMP
       `);
+      invalidateAllCaches();
       res.json({ success: true, message: 'All data cleared successfully.' });
     } catch (err) {
       next(err);

@@ -1,8 +1,12 @@
 import { query } from '../config/db.js';
+import { memoryCache, CacheKeys, invalidateClientCaches } from '../services/cacheService.js';
 
 export const businessCustomerController = {
   getBusinesses: async (req, res, next) => {
     try {
+      const cached = memoryCache.get(CacheKeys.BUSINESSES);
+      if (cached) return res.json(cached);
+
       const result = await query('SELECT * FROM businesses ORDER BY created_at ASC');
       const businesses = result.rows.map(b => ({
         id: b.id,
@@ -14,6 +18,7 @@ export const businessCustomerController = {
         prefix: b.prefix,
         currency: b.currency
       }));
+      memoryCache.set(CacheKeys.BUSINESSES, businesses, 300);
       res.json(businesses);
     } catch (err) {
       next(err);
@@ -22,6 +27,9 @@ export const businessCustomerController = {
 
   getCustomers: async (req, res, next) => {
     try {
+      const cached = memoryCache.get(CacheKeys.CUSTOMERS);
+      if (cached) return res.json(cached);
+
       const result = await query('SELECT * FROM customers ORDER BY created_at ASC');
       const customers = result.rows.map(c => ({
         id: c.id,
@@ -32,6 +40,7 @@ export const businessCustomerController = {
         address: c.address,
         items: c.items || []
       }));
+      memoryCache.set(CacheKeys.CUSTOMERS, customers, 300);
       res.json(customers);
     } catch (err) {
       next(err);
@@ -117,6 +126,8 @@ export const businessCustomerController = {
           items: customer.items || []
         }
       });
+
+      invalidateClientCaches();
     } catch (err) {
       next(err);
     }
@@ -182,6 +193,8 @@ export const businessCustomerController = {
           items: updateCust.rows[0].items || []
         } : null
       });
+
+      invalidateClientCaches();
     } catch (err) {
       next(err);
     }
@@ -219,6 +232,8 @@ export const businessCustomerController = {
         await query('DELETE FROM businesses WHERE id = $1', [businessId]);
         businessDeleted = true;
       }
+
+      invalidateClientCaches();
 
       res.json({
         success: true,

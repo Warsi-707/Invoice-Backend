@@ -1,9 +1,14 @@
 import { query } from '../config/db.js';
+import { memoryCache, CacheKeys } from '../services/cacheService.js';
 
 export const reportController = {
   getSummary: async (req, res, next) => {
     try {
       const { businessId, month, year } = req.query;
+
+      const cacheKey = `${CacheKeys.REPORT_PREFIX}${businessId || 'all'}:${month || 'all'}:${year || 'all'}`;
+      const cached = memoryCache.get(cacheKey);
+      if (cached) return res.json(cached);
 
       let whereClauses = [];
       let params = [];
@@ -39,7 +44,7 @@ export const reportController = {
       const statsRes = await query(statsQuery, params);
       const stats = statsRes.rows[0];
 
-      res.json({
+      const reportData = {
         totalInvoices: parseInt(stats.total_invoices, 10),
         totalBilled: Number(stats.total_billed),
         totalCollected: Number(stats.total_collected),
@@ -47,7 +52,10 @@ export const reportController = {
         countPaid: parseInt(stats.count_paid, 10),
         countPartial: parseInt(stats.count_partial, 10),
         countUnpaid: parseInt(stats.count_unpaid, 10)
-      });
+      };
+
+      memoryCache.set(cacheKey, reportData, 300);
+      res.json(reportData);
     } catch (err) {
       next(err);
     }

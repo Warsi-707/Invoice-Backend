@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { memoryCache, CacheKeys, invalidateInvoiceCaches } from '../services/cacheService.js';
 
 function mapInvoice(row) {
   return {
@@ -27,8 +28,13 @@ function mapInvoice(row) {
 export const invoiceController = {
   getInvoices: async (req, res, next) => {
     try {
+      const cached = memoryCache.get(CacheKeys.INVOICES);
+      if (cached) return res.json(cached);
+
       const result = await query('SELECT * FROM invoices ORDER BY created_at DESC');
-      res.json(result.rows.map(mapInvoice));
+      const invoices = result.rows.map(mapInvoice);
+      memoryCache.set(CacheKeys.INVOICES, invoices, 300);
+      res.json(invoices);
     } catch (err) {
       next(err);
     }
@@ -104,6 +110,8 @@ export const invoiceController = {
         ]
       );
 
+      invalidateInvoiceCaches();
+
       res.status(201).json({ success: true, invoice: mapInvoice(insertRes.rows[0]) });
     } catch (err) {
       next(err);
@@ -161,6 +169,8 @@ export const invoiceController = {
          WHERE id = $3 RETURNING *`,
         [total, JSON.stringify(updatedPayments), id]
       );
+
+      invalidateInvoiceCaches();
 
       res.json({ success: true, invoice: mapInvoice(updateRes.rows[0]) });
     } catch (err) {
@@ -227,6 +237,8 @@ export const invoiceController = {
          WHERE id = $5 RETURNING *`,
         [newPaid, newBalance, newStatus, JSON.stringify(updatedPayments), id]
       );
+
+      invalidateInvoiceCaches();
 
       res.json({ success: true, invoice: mapInvoice(updateRes.rows[0]) });
     } catch (err) {
@@ -300,6 +312,8 @@ export const invoiceController = {
         reversedAt: revRow.reversed_at
       };
 
+      invalidateInvoiceCaches();
+
       res.json({
         success: true,
         invoice: mapInvoice(updateRes.rows[0]),
@@ -314,6 +328,7 @@ export const invoiceController = {
     try {
       const { id } = req.params;
       await query('DELETE FROM invoices WHERE id = $1', [id]);
+      invalidateInvoiceCaches();
       res.json({ success: true, id });
     } catch (err) {
       next(err);

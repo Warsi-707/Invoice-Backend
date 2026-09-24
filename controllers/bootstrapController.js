@@ -1,8 +1,15 @@
 import { query } from '../config/db.js';
+import { memoryCache, CacheKeys } from '../services/cacheService.js';
 
 export const bootstrapController = {
   getBootstrapState: async (req, res, next) => {
     try {
+      // ⚡ 0-Delay In-Memory Cache Check (< 1ms)
+      const cachedState = memoryCache.get(CacheKeys.BOOTSTRAP);
+      if (cachedState) {
+        return res.json(cachedState);
+      }
+
       const [settingsRes, businessesRes, customersRes, invoicesRes, reversalsRes] = await Promise.all([
         query('SELECT * FROM settings LIMIT 1'),
         query('SELECT * FROM businesses ORDER BY created_at ASC'),
@@ -73,6 +80,9 @@ export const bootstrapController = {
           createdAt: r.created_at
         }))
       };
+
+      // Cache state in memory for subsequent instant 0ms responses
+      memoryCache.set(CacheKeys.BOOTSTRAP, state, 300);
 
       res.json(state);
     } catch (err) {

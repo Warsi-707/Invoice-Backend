@@ -109,6 +109,16 @@ export async function initDb() {
         reversed_at VARCHAR(50) DEFAULT '',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- High Performance Indexes for Instant Queries
+      CREATE INDEX IF NOT EXISTS idx_invoices_biz ON invoices (business_id);
+      CREATE INDEX IF NOT EXISTS idx_invoices_cust ON invoices (customer_id);
+      CREATE INDEX IF NOT EXISTS idx_invoices_biz_cust ON invoices (business_id, customer_id);
+      CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices (created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
+      CREATE INDEX IF NOT EXISTS idx_customers_biz ON customers (business_id);
+      CREATE INDEX IF NOT EXISTS idx_reversals_created ON reversals (created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_reversals_invoice_id ON reversals (invoice_id);
     `);
 
     // Ensure default settings row exists
