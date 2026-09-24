@@ -1,7 +1,8 @@
 import makeWASocketPkg, {
   DisconnectReason,
   useMultiFileAuthState,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  Browsers
 } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
 import pino from 'pino';
@@ -27,6 +28,7 @@ let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'CONNECTING' | 'SCAN_
 let currentQrDataUrl = null;
 let connectedUser = null;
 let isInitializing = false;
+let cachedVersion = [2, 3000, 1043857760];
 
 const logger = pino({ level: 'silent' });
 
@@ -81,9 +83,16 @@ export async function initWhatsApp(forceRestart = false) {
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-    const version = [2, 3000, 1015901307];
 
-    console.log(`📱 Initializing Baileys WhatsApp Web (v${version.join('.')})...`);
+    // Try to fetch latest Baileys protocol version or use modern fallback
+    try {
+      const vObj = await fetchLatestBaileysVersion();
+      if (vObj?.version) cachedVersion = vObj.version;
+    } catch (e) {
+      // Keep cached modern version
+    }
+
+    console.log(`📱 Initializing Baileys WhatsApp Web (v${cachedVersion.join('.')})...`);
 
     if (sock) {
       try {
@@ -95,11 +104,11 @@ export async function initWhatsApp(forceRestart = false) {
     }
 
     sock = makeWASocket({
-      version,
+      version: cachedVersion,
       logger,
       printQRInTerminal: false,
       auth: state,
-      browser: ['Invoice Manager', 'Chrome', '1.0.0'],
+      browser: Browsers.macOS('Desktop'),
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
       linkPreviewImageThumbnailWidth: 0,
