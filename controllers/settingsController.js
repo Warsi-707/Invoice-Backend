@@ -135,6 +135,8 @@ export const settingsController = {
           date: i.date,
           dueDate: i.due_date,
           subtotal: Number(i.subtotal || 0),
+          previousDues: Number(i.previous_dues || 0),
+          previousDuesMonths: i.previous_dues_months || '',
           discount: Number(i.discount || 0),
           lateFee: Number(i.late_fee || 0),
           total: Number(i.total || 0),

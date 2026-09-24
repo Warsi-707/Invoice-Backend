@@ -62,6 +62,8 @@ export const whatsappController = {
           date: row.date,
           dueDate: row.due_date,
           subtotal: Number(row.subtotal),
+          previousDues: Number(row.previous_dues || 0),
+          previousDuesMonths: row.previous_dues_months || '',
           discount: Number(row.discount),
           lateFee: Number(row.late_fee),
           total: Number(row.total),

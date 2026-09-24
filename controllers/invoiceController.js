@@ -13,6 +13,7 @@ function mapInvoice(row) {
     dueDate: row.due_date,
     subtotal: Number(row.subtotal || 0),
     previousDues: Number(row.previous_dues || 0),
+    previousDuesMonths: row.previous_dues_months || '',
     discount: Number(row.discount || 0),
     lateFee: Number(row.late_fee || 0),
     total: Number(row.total || 0),
@@ -51,6 +52,7 @@ export const invoiceController = {
         dueDate,
         subtotal = 0,
         previousDues = 0,
+        previousDuesMonths = '',
         discount = 0,
         lateFee = 0,
         total,
@@ -85,8 +87,8 @@ export const invoiceController = {
       const insertRes = await query(
         `INSERT INTO invoices (
           id, invoice_no, business_id, customer_id, month, year, date, due_date,
-          subtotal, previous_dues, discount, late_fee, total, paid, balance, status, items, payments
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          subtotal, previous_dues, previous_dues_months, discount, late_fee, total, paid, balance, status, items, payments
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING *`,
         [
           id,
@@ -99,6 +101,7 @@ export const invoiceController = {
           dueDate,
           Number(subtotal || 0),
           Number(previousDues || 0),
+          String(previousDuesMonths || ''),
           Number(discount || 0),
           Number(lateFee || 0),
           numTotal,

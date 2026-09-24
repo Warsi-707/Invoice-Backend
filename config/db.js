@@ -96,6 +96,7 @@ export async function initDb() {
       );
 
       ALTER TABLE invoices ADD COLUMN IF NOT EXISTS previous_dues NUMERIC(14, 2) DEFAULT 0;
+      ALTER TABLE invoices ADD COLUMN IF NOT EXISTS previous_dues_months VARCHAR(255) DEFAULT '';
 
       CREATE TABLE IF NOT EXISTS reversals (
         id VARCHAR(50) PRIMARY KEY,
