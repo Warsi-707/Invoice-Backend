@@ -26,7 +26,8 @@ export const bootstrapController = {
           currency: settingsRow.currency || 'PKR',
           dueDays: settingsRow.due_days ?? 0,
           footerNote: settingsRow.footer_note || 'Thank you for your business.',
-          proposalData: settingsRow.proposal_data || {}
+          proposalData: settingsRow.proposal_data || {},
+          whatsappSettings: settingsRow.whatsapp_settings || { initialDelay: 2, messageDelay: 3 }
         },
         businesses: businessesRes.rows.map(b => ({
           id: b.id,

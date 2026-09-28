@@ -45,6 +45,7 @@ export async function initDb() {
 
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT 'admin123';
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS proposal_data JSONB DEFAULT '{}'::jsonb;
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS whatsapp_settings JSONB DEFAULT '{"initialDelay":2,"messageDelay":3}'::jsonb;
       UPDATE settings SET password = 'admin123' WHERE password IS NULL OR password = '';
 
       CREATE TABLE IF NOT EXISTS businesses (

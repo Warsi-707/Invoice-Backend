@@ -14,7 +14,8 @@ export const settingsController = {
         currency: 'PKR',
         due_days: 0,
         footer_note: 'Thank you for your business.',
-        proposal_data: {}
+        proposal_data: {},
+        whatsapp_settings: { initialDelay: 2, messageDelay: 3 }
       };
 
       const settingsData = {
@@ -23,7 +24,8 @@ export const settingsController = {
         currency: row.currency || 'PKR',
         dueDays: row.due_days ?? 0,
         footerNote: row.footer_note || 'Thank you for your business.',
-        proposalData: row.proposal_data || {}
+        proposalData: row.proposal_data || {},
+        whatsappSettings: row.whatsapp_settings || { initialDelay: 2, messageDelay: 3 }
       };
 
       memoryCache.set(CacheKeys.SETTINGS, settingsData, 300);
@@ -41,28 +43,32 @@ export const settingsController = {
         currency = 'PKR',
         dueDays = 0,
         footerNote = 'Thank you for your business.',
-        proposalData = {}
+        proposalData = {},
+        whatsappSettings = { initialDelay: 2, messageDelay: 3 }
       } = req.body;
 
-      const check = await query('SELECT id, password, proposal_data FROM settings LIMIT 1');
+      const check = await query('SELECT id, password, proposal_data, whatsapp_settings FROM settings LIMIT 1');
       let result;
       const targetPass = (password && password.trim()) ? password.trim() : (check.rows[0]?.password || 'admin123');
       const targetProposal = typeof proposalData === 'object' && proposalData !== null
         ? JSON.stringify(proposalData)
         : JSON.stringify(check.rows[0]?.proposal_data || {});
+      const targetWhatsappSettings = typeof whatsappSettings === 'object' && whatsappSettings !== null
+        ? JSON.stringify(whatsappSettings)
+        : JSON.stringify(check.rows[0]?.whatsapp_settings || { initialDelay: 2, messageDelay: 3 });
 
       if (check.rows.length === 0) {
         result = await query(
-          `INSERT INTO settings (admin, password, currency, due_days, footer_note, proposal_data)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-          [admin.trim(), targetPass, currency.trim(), parseInt(dueDays, 10) || 0, footerNote.trim(), targetProposal]
+          `INSERT INTO settings (admin, password, currency, due_days, footer_note, proposal_data, whatsapp_settings)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [admin.trim(), targetPass, currency.trim(), parseInt(dueDays, 10) || 0, footerNote.trim(), targetProposal, targetWhatsappSettings]
         );
       } else {
         result = await query(
           `UPDATE settings
-           SET admin = $1, password = $2, currency = $3, due_days = $4, footer_note = $5, proposal_data = $6, updated_at = CURRENT_TIMESTAMP
-           WHERE id = $7 RETURNING *`,
-          [admin.trim(), targetPass, currency.trim(), parseInt(dueDays, 10) || 0, footerNote.trim(), targetProposal, check.rows[0].id]
+           SET admin = $1, password = $2, currency = $3, due_days = $4, footer_note = $5, proposal_data = $6, whatsapp_settings = $7, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $8 RETURNING *`,
+          [admin.trim(), targetPass, currency.trim(), parseInt(dueDays, 10) || 0, footerNote.trim(), targetProposal, targetWhatsappSettings, check.rows[0].id]
         );
       }
 
@@ -77,7 +83,8 @@ export const settingsController = {
           currency: row.currency,
           dueDays: row.due_days,
           footerNote: row.footer_note,
-          proposalData: row.proposal_data || {}
+          proposalData: row.proposal_data || {},
+          whatsappSettings: row.whatsapp_settings || { initialDelay: 2, messageDelay: 3 }
         }
       });
     } catch (err) {
@@ -104,7 +111,9 @@ export const settingsController = {
           admin: settingsRow.admin || 'Admin',
           currency: settingsRow.currency || 'PKR',
           dueDays: settingsRow.due_days ?? 0,
-          footerNote: settingsRow.footer_note || 'Thank you for your business.'
+          footerNote: settingsRow.footer_note || 'Thank you for your business.',
+          proposalData: settingsRow.proposal_data || {},
+          whatsappSettings: settingsRow.whatsapp_settings || { initialDelay: 2, messageDelay: 3 }
         },
         businesses: businessesRes.rows.map(b => ({
           id: b.id,
@@ -185,17 +194,19 @@ export const settingsController = {
       const currency = data.settings.currency || 'PKR';
       const dueDays = data.settings.dueDays ?? 0;
       const footerNote = data.settings.footerNote || 'Thank you for your business.';
+      const proposalData = JSON.stringify(data.settings.proposalData || {});
+      const whatsappSettings = JSON.stringify(data.settings.whatsappSettings || { initialDelay: 2, messageDelay: 3 });
 
       const check = await query('SELECT id FROM settings LIMIT 1');
       if (check.rows.length === 0) {
         await query(
-          'INSERT INTO settings (admin, currency, due_days, footer_note) VALUES ($1, $2, $3, $4)',
-          [admin, currency, dueDays, footerNote]
+          'INSERT INTO settings (admin, currency, due_days, footer_note, proposal_data, whatsapp_settings) VALUES ($1, $2, $3, $4, $5, $6)',
+          [admin, currency, dueDays, footerNote, proposalData, whatsappSettings]
         );
       } else {
         await query(
-          'UPDATE settings SET admin = $1, currency = $2, due_days = $3, footer_note = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
-          [admin, currency, dueDays, footerNote, check.rows[0].id]
+          'UPDATE settings SET admin = $1, currency = $2, due_days = $3, footer_note = $4, proposal_data = $5, whatsapp_settings = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7',
+          [admin, currency, dueDays, footerNote, proposalData, whatsappSettings, check.rows[0].id]
         );
       }
 
