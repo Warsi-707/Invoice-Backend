@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { query } from '../config/db.js';
 
 const makeWASocket = makeWASocketPkg.default || makeWASocketPkg;
 
@@ -30,8 +31,79 @@ let currentQrDataUrl = null;
 let connectedUser = null;
 let isInitializing = false;
 let cachedVersion = [2, 3000, 1048361770];
+let reconnectAttempts = 0;
+let syncDbTimer = null;
 
 const logger = pino({ level: 'silent' });
+
+/**
+ * Restore WhatsApp Session files from PostgreSQL Neon Database if local directory is missing
+ */
+async function restoreSessionFromDb() {
+  try {
+    if (!fs.existsSync(SESSION_DIR)) {
+      fs.mkdirSync(SESSION_DIR, { recursive: true });
+    }
+
+    const credsPath = path.join(SESSION_DIR, 'creds.json');
+    if (fs.existsSync(credsPath)) {
+      return; // local files already present
+    }
+
+    const res = await query('SELECT id, data FROM whatsapp_auth_store');
+    if (res.rows.length > 0) {
+      console.log(`📥 Restoring ${res.rows.length} WhatsApp session files from PostgreSQL database...`);
+      for (const row of res.rows) {
+        const filePath = path.join(SESSION_DIR, row.id);
+        fs.writeFileSync(filePath, row.data, 'utf8');
+      }
+      console.log('✅ WhatsApp session successfully restored from PostgreSQL DB.');
+    }
+  } catch (err) {
+    console.warn('Notice restoring WhatsApp session from DB:', err.message);
+  }
+}
+
+/**
+ * Backup / Sync all WhatsApp session files to PostgreSQL Neon Database
+ */
+async function syncSessionToDb() {
+  if (syncDbTimer) clearTimeout(syncDbTimer);
+  syncDbTimer = setTimeout(async () => {
+    try {
+      if (!fs.existsSync(SESSION_DIR)) return;
+      const files = fs.readdirSync(SESSION_DIR);
+      if (files.length === 0) return;
+
+      for (const file of files) {
+        const filePath = path.join(SESSION_DIR, file);
+        if (fs.statSync(filePath).isFile()) {
+          const content = fs.readFileSync(filePath, 'utf8');
+          await query(
+            `INSERT INTO whatsapp_auth_store (id, data, updated_at)
+             VALUES ($1, $2, CURRENT_TIMESTAMP)
+             ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP`,
+            [file, content]
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('Notice syncing WhatsApp session to DB:', err.message);
+    }
+  }, 1000);
+}
+
+/**
+ * Clear WhatsApp Session from PostgreSQL Neon Database
+ */
+async function clearSessionFromDb() {
+  try {
+    await query('DELETE FROM whatsapp_auth_store');
+    console.log('🗑️ WhatsApp auth store cleared from PostgreSQL DB.');
+  } catch (err) {
+    console.warn('Notice clearing WhatsApp session from DB:', err.message);
+  }
+}
 
 export function getWhatsAppStatus() {
   return {
@@ -79,12 +151,18 @@ export async function initWhatsApp(forceRestart = false) {
   connectionStatus = 'CONNECTING';
 
   try {
-    if (forceRestart && fs.existsSync(SESSION_DIR)) {
+    if (forceRestart) {
       try {
-        fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+        if (fs.existsSync(SESSION_DIR)) {
+          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+        }
+        await clearSessionFromDb();
       } catch (e) {
-        console.warn('Notice removing old session on force restart:', e.message);
+        console.warn('Notice clearing old session on force restart:', e.message);
       }
+    } else {
+      // Restore from persistent PostgreSQL cloud database if local files were wiped
+      await restoreSessionFromDb();
     }
 
     if (!fs.existsSync(SESSION_DIR)) {
@@ -131,10 +209,17 @@ export async function initWhatsApp(forceRestart = false) {
       linkPreviewImageThumbnailWidth: 0,
       keepAliveIntervalMs: 25000,
       connectTimeoutMs: 60000,
-      defaultQueryTimeoutMs: 60000
+      defaultQueryTimeoutMs: 60000,
+      markOnlineOnConnect: true,
+      retryRequestDelayMs: 300,
+      maxMsgRetryCount: 5
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    // Save creds to disk and trigger background sync to PostgreSQL database
+    sock.ev.on('creds.update', async () => {
+      await saveCreds();
+      syncSessionToDb().catch(() => {});
+    });
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
@@ -165,6 +250,7 @@ export async function initWhatsApp(forceRestart = false) {
         connectionStatus = 'CONNECTED';
         currentQrDataUrl = null;
         isInitializing = false;
+        reconnectAttempts = 0;
 
         const rawUser = sock.user?.id || '';
         const userPhone = rawUser.split(':')[0] || rawUser.split('@')[0] || '';
@@ -175,12 +261,14 @@ export async function initWhatsApp(forceRestart = false) {
         };
 
         console.log(`✅ WhatsApp Connected successfully as ${connectedUser.phone}!`);
+        // Immediately sync complete session to PostgreSQL database
+        syncSessionToDb().catch(() => {});
       } else if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-        const isRestartRequired = statusCode === DisconnectReason.restartRequired;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
+        const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
 
-        console.log(`⚠️ WhatsApp connection closed. Reason code: ${statusCode}. LoggedOut: ${isLoggedOut}, RestartRequired: ${isRestartRequired}`);
+        console.log(`⚠️ WhatsApp connection closed (Status: ${statusCode}). LoggedOut: ${isLoggedOut}, RestartRequired: ${isRestartRequired}`);
 
         if (sock) {
           try {
@@ -190,6 +278,7 @@ export async function initWhatsApp(forceRestart = false) {
         sock = null;
 
         if (isLoggedOut) {
+          console.log('🔴 WhatsApp explicitly logged out. Clearing credentials...');
           connectionStatus = 'DISCONNECTED';
           currentQrDataUrl = null;
           connectedUser = null;
@@ -198,6 +287,7 @@ export async function initWhatsApp(forceRestart = false) {
             if (fs.existsSync(SESSION_DIR)) {
               fs.rmSync(SESSION_DIR, { recursive: true, force: true });
             }
+            await clearSessionFromDb();
           } catch (err) {
             console.error('Error clearing session dir:', err);
           }
@@ -205,21 +295,18 @@ export async function initWhatsApp(forceRestart = false) {
           setTimeout(() => {
             initWhatsApp(true).catch(console.error);
           }, 1500);
-        } else if (isRestartRequired || connectedUser) {
-          // Normal handshake restart or reconnecting linked user - keep creds intact
+        } else {
+          // 🛡️ CRITICAL FIX: NEVER wipe saved credentials on temporary network/stream disconnects!
+          // Reconnect smoothly with existing credentials from disk/PostgreSQL
           connectionStatus = 'CONNECTING';
           isInitializing = false;
+          reconnectAttempts += 1;
+          const delayMs = Math.min(1000 * reconnectAttempts, 5000);
+          console.log(`🔄 Reconnecting WhatsApp in ${delayMs}ms (Attempt ${reconnectAttempts}). Keeping saved credentials intact...`);
+
           setTimeout(() => {
             initWhatsApp(false).catch(console.error);
-          }, 800);
-        } else {
-          // QR code expired or unpaired socket timed out - refresh QR cleanly
-          connectionStatus = 'CONNECTING';
-          currentQrDataUrl = null;
-          isInitializing = false;
-          setTimeout(() => {
-            initWhatsApp(true).catch(console.error);
-          }, 1000);
+          }, delayMs);
         }
       }
     });
@@ -270,6 +357,7 @@ export async function logoutWhatsApp() {
     if (fs.existsSync(SESSION_DIR)) {
       fs.rmSync(SESSION_DIR, { recursive: true, force: true });
     }
+    await clearSessionFromDb();
   } catch (err) {
     console.error('Error removing session directory:', err);
   }

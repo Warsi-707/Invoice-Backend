@@ -112,6 +112,12 @@ export async function initDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS whatsapp_auth_store (
+        id VARCHAR(255) PRIMARY KEY,
+        data TEXT NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- High Performance Indexes for Instant Queries
       CREATE INDEX IF NOT EXISTS idx_invoices_biz ON invoices (business_id);
       CREATE INDEX IF NOT EXISTS idx_invoices_cust ON invoices (customer_id);
